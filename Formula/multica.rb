@@ -1,28 +1,28 @@
 class Multica < Formula
   desc "Multica CLI — local agent runtime with interactive terminal (Firtal build)"
   homepage "https://github.com/firtal-group/firtal-cerebro"
-  version "1.4.0"
+  version "1.4.1"
   license "Apache-2.0"
 
   on_macos do
     on_arm do
-      url "https://github.com/firtal-group/firtal-cerebro/releases/download/v1.4.0/multica-cli-1.4.0-darwin-arm64.tar.gz"
-      sha256 "12a8995e9afee3949f9881b7fa9038c9e857c7ce0662c6919254c77c82f2a509"
+      url "https://github.com/firtal-group/homebrew-tap/releases/download/v1.4.1/multica-cli-1.4.1-darwin-arm64.tar.gz"
+      sha256 "ab73c540cf32257ff0d6d507f8ed9dcd371ada087892eec78ac6eda6861cdc89"
     end
     on_intel do
-      url "https://github.com/firtal-group/firtal-cerebro/releases/download/v1.4.0/multica-cli-1.4.0-darwin-amd64.tar.gz"
-      sha256 "ded529b87c231ab901c8e82999bdd871da1bda6427abd7d26781c7ccc1ca0c5e"
+      url "https://github.com/firtal-group/homebrew-tap/releases/download/v1.4.1/multica-cli-1.4.1-darwin-amd64.tar.gz"
+      sha256 "4df6aac2ac13b7da569f22e45a51293b98832c40b53cf95af042769d11c9a574"
     end
   end
 
   on_linux do
     on_intel do
-      url "https://github.com/firtal-group/firtal-cerebro/releases/download/v1.4.0/multica-cli-1.4.0-linux-amd64.tar.gz"
-      sha256 "f355def3f4952f1c88fdab8753c8e60556fa2bf0d79861cdbdf42191b90b2a75"
+      url "https://github.com/firtal-group/homebrew-tap/releases/download/v1.4.1/multica-cli-1.4.1-linux-amd64.tar.gz"
+      sha256 "0edd9f4cc88abdaa0acc7e0ba9a660cde5bec85ed71aff6ffef9e7346da503c0"
     end
     on_arm do
-      url "https://github.com/firtal-group/firtal-cerebro/releases/download/v1.4.0/multica-cli-1.4.0-linux-arm64.tar.gz"
-      sha256 "a8a79c6daa8f8b70e59941831e5001e1f8a846b8cd50d4af7e83caf1a4bbbbe5"
+      url "https://github.com/firtal-group/homebrew-tap/releases/download/v1.4.1/multica-cli-1.4.1-linux-arm64.tar.gz"
+      sha256 "fe4ce5fe18bb28fa5e3dfe98dff3c02d7375a15cfa92b514266bda6d80d7d954"
     end
   end
 
