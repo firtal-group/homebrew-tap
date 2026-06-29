@@ -1,0 +1,167 @@
+name: Mirror Multica CLI from firtal-cerebro
+
+# Self-contained fork self-update channel (FIR-2107).
+#
+# WHY THIS LIVES HERE, NOT IN firtal-cerebro:
+# The Multica CLI is built in the PRIVATE repo firtal-group/firtal-cerebro, but
+# `multica update` / `brew upgrade` on local Mac runtimes pulls from THIS public
+# repo. The old design pushed from firtal-cerebro into here, which needed a
+# fine-grained PAT (HOMEBREW_TAP_GITHUB_TOKEN) with Contents:write on this repo —
+# that PAT kept failing on GitHub's org-approval/expiry dance (403s), so the tap
+# went stale and agents could not self-update.
+#
+# This workflow inverts it: it runs IN homebrew-tap and only ever WRITES to its
+# OWN repo, using the native GITHUB_TOKEN (no cross-repo write secret, no PAT,
+# no expiry, no org approval). The one thing it needs from outside is READ access
+# to the private firtal-cerebro release assets — covered by the existing
+# firtal-multica GitHub App, which already has Contents:read org-wide. We mint a
+# short-lived installation token from it for the download only.
+#
+# Net effect: every new firtal-cerebro CLI release is mirrored here automatically
+# within the poll interval, with zero human action.
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'   # poll firtal-cerebro for a newer CLI release every 20 min
+  workflow_dispatch:          # manual "mirror now"
+
+permissions:
+  contents: write             # GITHUB_TOKEN writes releases + the formula commit on THIS repo
+
+concurrency:
+  group: mirror-cli
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+
+      - name: Mint read-only token for firtal-cerebro (firtal-multica App)
+        id: cerebro_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.CEREBRO_APP_ID }}
+          private-key: ${{ secrets.CEREBRO_APP_PRIVATE_KEY }}
+          owner: firtal-group
+          repositories: firtal-cerebro
+
+      - name: Resolve source (firtal-cerebro) and current (tap) versions
+        id: vers
+        env:
+          GH_TOKEN: ${{ steps.cerebro_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          SRC=$(gh release view --repo firtal-group/firtal-cerebro --json tagName -q .tagName)
+          echo "source tag: $SRC"
+          # Current tap formula version (source of truth for "what users get")
+          CUR=$(grep -E '^\s*version\s+"' Formula/multica.rb | head -1 | sed -E 's/.*"([^"]+)".*/v\1/')
+          echo "tap formula version: $CUR"
+          echo "src=$SRC"  >> "$GITHUB_OUTPUT"
+          echo "cur=$CUR"  >> "$GITHUB_OUTPUT"
+          if [ "$SRC" = "$CUR" ]; then
+            echo "up_to_date=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Tap already on $CUR — nothing to mirror."
+          else
+            echo "up_to_date=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::New CLI release $SRC (tap on $CUR) — mirroring."
+          fi
+
+      - name: Download CLI assets from firtal-cerebro release
+        if: steps.vers.outputs.up_to_date == 'false'
+        env:
+          GH_TOKEN: ${{ steps.cerebro_token.outputs.token }}
+          TAG: ${{ steps.vers.outputs.src }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist-tap && cd dist-tap
+          # Both the canonical multica-cli-* names and the legacy multica_* names,
+          # plus checksums.txt — matches what the formula + forkdist updater expect.
+          gh release download "$TAG" --repo firtal-group/firtal-cerebro \
+            --pattern 'multica-cli-*' --pattern 'multica_*' --pattern 'checksums.txt'
+          echo "Downloaded:" && ls -1
+
+      - name: Publish mirrored release on this repo (homebrew-tap)
+        if: steps.vers.outputs.up_to_date == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}        # native token — writes to THIS repo only
+          TAG: ${{ steps.vers.outputs.src }}
+        run: |
+          set -euo pipefail
+          cd dist-tap
+          notes="CLI binaries for the fork self-update channel, mirrored automatically from the firtal-cerebro release of ${TAG} so \`multica update\` / \`brew upgrade\` on local runtimes self-heals (FIR-2107; mirror runs in this repo using its own GITHUB_TOKEN)."
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber ./*
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes "$notes" ./*
+          fi
+          echo "Published ${TAG} assets to ${GITHUB_REPOSITORY}"
+
+      - name: Regenerate and commit the Homebrew formula
+        if: steps.vers.outputs.up_to_date == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.vers.outputs.src }}
+        run: |
+          set -euo pipefail
+          VER="${TAG#v}"
+          C=dist-tap/checksums.txt
+          sha() { grep -E "  multica-cli-${VER}-$1\$" "$C" | awk '{print $1}'; }
+          DA=$(sha darwin-arm64.tar.gz); DI=$(sha darwin-amd64.tar.gz)
+          LI=$(sha linux-amd64.tar.gz);  LA=$(sha linux-arm64.tar.gz)
+          for v in "$DA" "$DI" "$LI" "$LA"; do
+            if [ -z "$v" ]; then echo "::error::missing checksum for ${VER}"; exit 1; fi
+          done
+          B="https://github.com/firtal-group/homebrew-tap/releases/download/${TAG}"
+          # printf '%s\n' with one explicit arg per line — formula indentation
+          # lives inside the quotes, so it is immune to this YAML block's indent.
+          printf '%s\n' \
+            'class Multica < Formula' \
+            '  desc "Multica CLI — local agent runtime with interactive terminal (Firtal build)"' \
+            '  homepage "https://github.com/firtal-group/firtal-cerebro"' \
+            "  version \"${VER}\"" \
+            '  license "Apache-2.0"' \
+            '' \
+            '  on_macos do' \
+            '    on_arm do' \
+            "      url \"${B}/multica-cli-${VER}-darwin-arm64.tar.gz\"" \
+            "      sha256 \"${DA}\"" \
+            '    end' \
+            '    on_intel do' \
+            "      url \"${B}/multica-cli-${VER}-darwin-amd64.tar.gz\"" \
+            "      sha256 \"${DI}\"" \
+            '    end' \
+            '  end' \
+            '' \
+            '  on_linux do' \
+            '    on_intel do' \
+            "      url \"${B}/multica-cli-${VER}-linux-amd64.tar.gz\"" \
+            "      sha256 \"${LI}\"" \
+            '    end' \
+            '    on_arm do' \
+            "      url \"${B}/multica-cli-${VER}-linux-arm64.tar.gz\"" \
+            "      sha256 \"${LA}\"" \
+            '    end' \
+            '  end' \
+            '' \
+            '  def install' \
+            '    bin.install "multica"' \
+            '  end' \
+            '' \
+            '  test do' \
+            '    system "#{bin}/multica", "version"' \
+            '  end' \
+            'end' \
+            > Formula/multica.rb
+          if git diff --quiet -- Formula/multica.rb; then
+            echo "Formula already at ${VER} — no commit needed."
+            exit 0
+          fi
+          git config user.name  "firtal-tap-mirror[bot]"
+          git config user.email "firtal-tap-mirror@users.noreply.github.com"
+          git add Formula/multica.rb
+          git commit -m "chore: bump formula to ${VER} (auto-mirror from firtal-cerebro, FIR-2107)"
+          git push
+          echo "Formula bumped to ${VER}."
