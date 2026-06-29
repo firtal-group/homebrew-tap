@@ -1,7 +1,7 @@
 class Multica < Formula
   desc "Multica CLI — local agent runtime with interactive terminal (Firtal build)"
   homepage "https://github.com/firtal-group/firtal-cerebro"
-  version "1.11.2"
+  version "1.11.1"
   license "Apache-2.0"
 
   on_macos do
