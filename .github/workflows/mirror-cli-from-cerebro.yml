@@ -48,13 +48,14 @@ jobs:
           owner: firtal-group
           repositories: firtal-cerebro
 
-      - name: Resolve source (firtal-cerebro) and current (tap) versions
+      - name: Resolve source release and tap state
         id: vers
         env:
-          GH_TOKEN: ${{ steps.cerebro_token.outputs.token }}
+          SOURCE_TOKEN: ${{ steps.cerebro_token.outputs.token }}
+          TAP_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          SRC=$(gh release view --repo firtal-group/firtal-cerebro --json tagName -q .tagName)
+          SRC=$(GH_TOKEN="$SOURCE_TOKEN" gh release view --repo firtal-group/firtal-cerebro --json tagName -q .tagName)
           echo "source tag: $SRC"
           # Current tap formula version (source of truth for "what users get")
           CUR=$(grep -E '^\s*version\s+"' Formula/multica.rb | head -1 | sed -E 's/.*"([^"]+)".*/v\1/')
@@ -62,29 +63,48 @@ jobs:
           echo "src=$SRC"  >> "$GITHUB_OUTPUT"
           echo "cur=$CUR"  >> "$GITHUB_OUTPUT"
           if [ "$SRC" = "$CUR" ]; then
-            echo "up_to_date=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Tap already on $CUR — nothing to mirror."
+            echo "formula_outdated=false" >> "$GITHUB_OUTPUT"
           else
-            echo "up_to_date=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::New CLI release $SRC (tap on $CUR) — mirroring."
+            echo "formula_outdated=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::New CLI release $SRC (tap formula on $CUR)."
           fi
 
-      - name: Download CLI assets from firtal-cerebro release
-        if: steps.vers.outputs.up_to_date == 'false'
+          SOURCE_ASSETS=$(GH_TOKEN="$SOURCE_TOKEN" gh release view "$SRC" \
+            --repo firtal-group/firtal-cerebro --json assets --jq '.assets[].name' | sort)
+          if GH_TOKEN="$TAP_TOKEN" gh release view "$SRC" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            TAP_ASSETS=$(GH_TOKEN="$TAP_TOKEN" gh release view "$SRC" \
+              --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort)
+          else
+            TAP_ASSETS=""
+          fi
+          MISSING_ASSETS=$(comm -23 \
+            <(printf '%s\n' "$SOURCE_ASSETS") \
+            <(printf '%s\n' "$TAP_ASSETS"))
+          if [ -n "$MISSING_ASSETS" ]; then
+            echo "assets_outdated=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Source release has assets not yet mirrored:"
+            printf '%s\n' "$MISSING_ASSETS"
+          else
+            echo "assets_outdated=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::All source assets for $SRC are already mirrored."
+          fi
+
+      - name: Download release assets from firtal-cerebro
+        if: steps.vers.outputs.formula_outdated == 'true' || steps.vers.outputs.assets_outdated == 'true'
         env:
           GH_TOKEN: ${{ steps.cerebro_token.outputs.token }}
           TAG: ${{ steps.vers.outputs.src }}
         run: |
           set -euo pipefail
           mkdir -p dist-tap && cd dist-tap
-          # Both the canonical multica-cli-* names and the legacy multica_* names,
-          # plus checksums.txt — matches what the formula + forkdist updater expect.
-          gh release download "$TAG" --repo firtal-group/firtal-cerebro \
-            --pattern 'multica-cli-*' --pattern 'multica_*' --pattern 'checksums.txt'
+          # Download every source asset. CLI archives arrive first, while
+          # Desktop installers and update metadata are uploaded by later jobs.
+          # A later mirror run detects and copies those late assets too.
+          gh release download "$TAG" --repo firtal-group/firtal-cerebro
           echo "Downloaded:" && ls -1
 
       - name: Publish mirrored release on this repo (homebrew-tap)
-        if: steps.vers.outputs.up_to_date == 'false'
+        if: steps.vers.outputs.assets_outdated == 'true'
         env:
           GH_TOKEN: ${{ github.token }}        # native token — writes to THIS repo only
           TAG: ${{ steps.vers.outputs.src }}
@@ -100,7 +120,7 @@ jobs:
           echo "Published ${TAG} assets to ${GITHUB_REPOSITORY}"
 
       - name: Regenerate and commit the Homebrew formula
-        if: steps.vers.outputs.up_to_date == 'false'
+        if: steps.vers.outputs.formula_outdated == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.vers.outputs.src }}
