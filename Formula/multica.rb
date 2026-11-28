@@ -1,28 +1,28 @@
 class Multica < Formula
   desc "Multica CLI — local agent runtime with interactive terminal (Firtal build)"
   homepage "https://github.com/firtal-group/firtal-cerebro"
-  version "1.111.0"
+  version "1.112.0"
   license "Apache-2.0"
 
   on_macos do
     on_arm do
-      url "https://github.com/firtal-group/homebrew-tap/releases/download/v1.111.0/multica-cli-1.111.0-darwin-arm64.tar.gz"
-      sha256 "af60297ad7b2f35b0c664579757887f0d71ba41e8964b53d1a557bbd8160c5df"
+      url "https://github.com/firtal-group/homebrew-tap/releases/download/v1.112.0/multica-cli-1.112.0-darwin-arm64.tar.gz"
+      sha256 "ad538a8419e9a449477d0616167c9998e32d19fedea4d3361eb632dce28161b3"
     end
     on_intel do
-      url "https://github.com/firtal-group/homebrew-tap/releases/download/v1.111.0/multica-cli-1.111.0-darwin-amd64.tar.gz"
-      sha256 "05b789631a27e37d7be637703a78ff27a3d1ffd8d6c190ecbbb2a12241e6d67e"
+      url "https://github.com/firtal-group/homebrew-tap/releases/download/v1.112.0/multica-cli-1.112.0-darwin-amd64.tar.gz"
+      sha256 "9a69fa1713ed216b1b2de68d8debb01a08593b41f606c837cd38fb3adee31a7c"
     end
   end
 
   on_linux do
     on_intel do
-      url "https://github.com/firtal-group/homebrew-tap/releases/download/v1.111.0/multica-cli-1.111.0-linux-amd64.tar.gz"
-      sha256 "bb64eeeaa3aa09a1e6c261e0ea447b6df703222d9b0d788c00ab8302ab16b39a"
+      url "https://github.com/firtal-group/homebrew-tap/releases/download/v1.112.0/multica-cli-1.112.0-linux-amd64.tar.gz"
+      sha256 "7b0a1cd215f75ac75ad7c35591679aca7897ed15a0b3719477493a28a023374b"
     end
     on_arm do
-      url "https://github.com/firtal-group/homebrew-tap/releases/download/v1.111.0/multica-cli-1.111.0-linux-arm64.tar.gz"
-      sha256 "8dd2ca8e2459c67525914d59acf72cb0d77af0ac469992c13e8532d93362ce35"
+      url "https://github.com/firtal-group/homebrew-tap/releases/download/v1.112.0/multica-cli-1.112.0-linux-arm64.tar.gz"
+      sha256 "5d105e64063a5de15111a7e4d88b6d3f5f1811ebcb2f47e44375cfdb034b60b2"
     end
   end
 
